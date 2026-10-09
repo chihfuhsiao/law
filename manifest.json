@@ -1,0 +1,16 @@
+{
+  "name": "台中市土管查詢",
+  "short_name": "土管查詢",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f5f2",
+  "theme_color": "#1f5f8b",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    }
+  ]
+}

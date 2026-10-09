@@ -1,0 +1,901 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>台中市土管查詢</title>
+<link rel="icon" href="favicon.ico">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="土管查詢">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<script src="lib/pdf.min.js"></script>
+<style>
+#rescanBtn,#refRemove,#saveSettings,.linkbtn[onclick*="removeItem"]{display:none!important}
+#pv{position:fixed;inset:0;z-index:10000;background:#525659;display:flex;flex-direction:column}
+#pv.hidden,#iv.hidden{display:none}
+#pv .bar,#iv .bar{display:flex;align-items:center;gap:8px;padding:8px 10px;padding-top:max(8px,env(safe-area-inset-top));background:#2b2d30;color:#fff;font-size:15px}
+#pv .bar .t,#iv .bar .t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#pv .bar button,#iv .bar button{font-size:15px;padding:6px 12px;border-radius:6px;border:0;background:#4a4d52;color:#fff}
+#pv .bar button.x,#iv .bar button.x{background:#1f5f8b}
+#pvBody{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:10px 0}
+#pvBody .pg{margin:0 auto 10px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.4);position:relative}
+#pvBody .pg canvas{display:block;width:100%;height:100%}
+#pvBody .pg .no{position:absolute;right:6px;bottom:4px;font-size:11px;color:#999}
+#pvMsg{color:#fff;text-align:center;padding:30px;font-size:15px}
+#iv{position:fixed;inset:0;z-index:10000;background:#222;display:flex;flex-direction:column}
+#ivBody{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
+#ivBody img{display:block;margin:0 auto;background:#fff}
+</style>
+
+<style>
+:root{
+  --bg:#f6f5f2; --panel:#ffffff; --ink:#1f2328; --muted:#6a6f76; --line:#e3e1dc;
+  --accent:#1f5f8b; --accent-soft:#e6f0f7; --mark:#ffe58a; --warn:#a15c00; --warn-soft:#fff3df;
+  --new:#2e7d4f; --shadow:0 1px 2px rgba(0,0,0,.05); --pub:#c62828;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#16181b; --panel:#1e2125; --ink:#e7e7e4; --muted:#9aa0a6; --line:#30343a;
+    --accent:#6fb0de; --accent-soft:#1d2f3d; --mark:#7a6420; --warn:#f0b35a; --warn-soft:#3a2d18;
+    --new:#6cc391; --shadow:none; --pub:#ff6b6b;
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.7 "Microsoft JhengHei","微軟正黑體","Noto Sans TC","PingFang TC",sans-serif}
+button,input{font:inherit;color:inherit}
+a{color:var(--accent)}
+.app{display:grid;grid-template-columns:340px 1fr;height:100vh}
+/* ---------- 左側清單 ---------- */
+.side{border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+.brand{padding:16px 18px 10px;border-bottom:1px solid var(--line)}
+.brand h1{font-size:18px;margin:0;letter-spacing:.04em}
+.brand .meta{font-size:12px;color:var(--muted);margin-top:2px;display:flex;justify-content:space-between;gap:8px}
+.linkbtn{background:none;border:0;padding:0;color:var(--accent);cursor:pointer;font-size:12px}
+.filter{padding:10px 14px;border-bottom:1px solid var(--line)}
+.filter input{width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.list{overflow:auto;flex:1;padding:4px 0 20px}
+.area{font-size:12px;color:var(--muted);padding:12px 18px 4px;letter-spacing:.06em}
+.item{display:grid;grid-template-columns:56px 1fr;gap:6px;width:100%;text-align:left;border:0;background:none;
+  padding:7px 14px 7px 18px;cursor:pointer;border-left:3px solid transparent}
+.item:hover{background:var(--bg)}
+.item.on{background:var(--accent-soft);border-left-color:var(--accent)}
+.item .code{font-variant-numeric:tabular-nums;color:var(--accent);font-weight:600;font-size:13px;padding-top:1px}
+.item .t{font-size:13.5px;line-height:1.45}
+.item .d{font-size:11.5px;color:var(--muted)}
+.badge{display:inline-block;font-size:11px;padding:0 6px;border-radius:9px;margin-left:4px;vertical-align:1px}
+.badge.new{background:var(--new);color:#fff}
+.badge.warn{background:var(--warn-soft);color:var(--warn)}
+.item.all .code{color:var(--ink)}
+/* ---------- 右側 ---------- */
+.main{overflow:auto;min-width:0}
+.head{position:sticky;top:0;z-index:2;background:var(--bg);border-bottom:1px solid var(--line);padding:16px 28px 12px}
+.doc-title{font-size:19px;font-weight:700;margin:0 0 4px;line-height:1.45}
+.doc-meta{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);
+  padding:4px 12px;border-radius:6px;cursor:pointer;text-decoration:none;color:var(--ink);font-size:13px;box-shadow:var(--shadow)}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{opacity:.9;color:#fff}
+.search{display:flex;gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap}
+.search #q{flex:1;min-width:220px;padding:10px 14px;font-size:16px;border:1.5px solid var(--line);
+  border-radius:8px;background:var(--panel)}
+.search #q:focus{outline:none;border-color:var(--accent)}
+.opt{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
+.summary{font-size:13px;color:var(--muted);margin-top:8px;min-height:1.2em}
+.warnbox{margin-top:8px;font-size:13px;background:var(--warn-soft);color:var(--warn);padding:6px 10px;border-radius:6px}
+.body{padding:16px 28px 80px;max-width:1000px}
+.docsep{margin:26px 0 10px;padding-top:14px;border-top:2px solid var(--line);display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.docsep:first-child{margin-top:0;border-top:0;padding-top:0}
+.docsep h2{font-size:16px;margin:0}
+.docsep h2 .code{color:var(--accent);margin-right:6px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;margin:10px 0;box-shadow:var(--shadow)}
+.card-h{display:flex;align-items:baseline;gap:10px;padding:9px 14px;cursor:pointer}
+.card-h .lab{font-weight:700;color:var(--accent);white-space:nowrap;min-width:3.2em}
+.card-h .first{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-h .grp{font-size:12px;color:var(--muted);white-space:nowrap;max-width:40%;overflow:hidden;text-overflow:ellipsis}
+.card-h .pg{font-size:12px;color:var(--muted);white-space:nowrap}
+.card-b{padding:2px 16px 12px 16px;border-top:1px solid var(--line)}
+.card-b p{margin:8px 0;white-space:pre-wrap;word-break:break-all}
+.card-b p.sub{padding-left:1.5em}
+.card-b p.hit{background:linear-gradient(90deg,var(--accent-soft),transparent 60%);border-radius:4px;padding-top:2px;padding-bottom:2px}
+.gap{color:var(--muted);font-size:12px;margin:2px 0;letter-spacing:.3em}
+.card-f{display:flex;gap:8px;justify-content:flex-end;padding:0 14px 10px}
+.tbl{overflow-x:auto;margin:10px 0}
+.tbl table{border-collapse:collapse;font-size:13.5px;line-height:1.5;min-width:50%}
+.tbl td{border:1px solid var(--line);padding:4px 8px;vertical-align:middle;text-align:center;white-space:pre-wrap}
+.tbl tr:first-child td{background:var(--bg);font-weight:600}
+.tbl td.hit{background:var(--accent-soft)}
+.fig{margin:10px 0;text-align:center}
+.fig img{max-width:100%;max-height:70vh;border:1px solid var(--line);border-radius:4px;background:#fff}
+a.figref{color:var(--accent);text-decoration:underline dotted;cursor:pointer}
+.quick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.quick-lab{font-size:12px;color:var(--muted)}
+.chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:2px 12px;font-size:13px;cursor:pointer}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pubdate{color:var(--pub);font-weight:700}
+.refbtns{display:flex;flex-direction:column;gap:6px;margin-top:8px}.refbtns:empty{display:none}
+.refbtn{display:flex;gap:8px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:6px 10px;font-size:13px;line-height:1.4;cursor:pointer;color:var(--ink)}
+.refbtn:hover{border-color:var(--accent);color:var(--accent)}
+.refview img{width:100%;height:auto;border:1px solid var(--line);border-radius:4px;background:#fff;cursor:zoom-in}
+.modal textarea{width:100%;font-family:Consolas,monospace;font-size:13px;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.sidefoot{font-size:11px;color:var(--muted);padding:8px 14px;border-top:1px solid var(--line);line-height:1.5}
+.copy{line-height:1.9}
+mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
+.empty{color:var(--muted);padding:40px 0;text-align:center}
+.hidden{display:none!important}
+/* ---------- 說明 ---------- */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:flex-start;justify-content:center;z-index:10;padding:5vh 16px;overflow:auto}
+.modal .box{background:var(--panel);border-radius:10px;max-width:760px;width:100%;padding:22px 28px;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+.modal h2{margin:0 0 6px;font-size:19px}
+.modal h3{margin:18px 0 4px;font-size:15px;color:var(--accent)}
+.modal ol,.modal ul{margin:4px 0;padding-left:1.4em}
+.modal li{margin:3px 0}
+.modal code{background:var(--bg);padding:1px 5px;border-radius:4px;font-size:13px}
+.modal pre{background:var(--bg);padding:10px 12px;border-radius:6px;font-size:12.5px;overflow:auto;line-height:1.5;white-space:pre;font-family:Consolas,monospace;margin:6px 0}
+.modal .close{float:right}
+.loglist{font-size:13px;max-height:180px;overflow:auto;background:var(--bg);padding:8px 12px;border-radius:6px}
+@media (max-width:820px){
+  .app{grid-template-columns:1fr;height:auto}
+  .side{max-height:45vh}
+  .head,.body{padding-left:16px;padding-right:16px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <h1>台中市土管查詢</h1>
+      <div class="meta"><span id="builtAt"></span><button class="linkbtn" id="helpBtn">說明／如何更新</button></div>
+      <div class="meta"><span id="scanMsg"></span><button class="linkbtn" id="rescanBtn" title="掃描資料夾內新增或變動的 PDF">重新掃描資料夾</button></div>
+    </div>
+    <div class="filter"><input id="docFilter" placeholder="篩選土管（編號或名稱，例：1-20、水湳）">
+      <div id="refBtns" class="refbtns"></div></div>
+    <div class="list" id="docList"></div>
+    <div class="sidefoot">© 2026 居研所聯合建築師事務所・作者 CHIHFU HSIAO・v1.2.0</div>
+  </aside>
+  <main class="main" id="main">
+    <div class="head">
+      <div class="doc-title" id="docTitle"></div>
+      <div class="doc-meta" id="docMeta"></div>
+      <div id="docWarn"></div>
+      <div class="search">
+        <input id="q" placeholder="輸入關鍵字；空白＝同時符合，| ＝或（例：退縮 騎樓、綠美化|綠化）" autocomplete="off">
+        <label class="opt"><input type="checkbox" id="onlyHit" checked>只顯示相關段落</label>
+      </div>
+      <div class="quick" id="quick"><span class="quick-lab">常用：</span>
+      </div>
+      <div class="summary" id="summary"></div>
+    </div>
+    <div class="body" id="results"></div>
+  </main>
+</div>
+
+<div class="modal hidden" id="figModal"><div class="box" id="figBox"></div></div>
+<div class="modal hidden" id="help">
+  <div class="box">
+    <button class="btn close" id="helpClose">關閉</button>
+    <h2>使用說明與更新方式</h2>
+
+    <h3>查詢</h3>
+    <ul>
+      <li>左側選擇土管（或選「全部土管」跨檔搜尋），在上方輸入關鍵字。</li>
+      <li>多個關鍵字用空白分隔，條文須同時包含全部關鍵字才會列出（例：<code>退縮 騎樓</code>）。</li>
+      <li>用 <code>|</code> 表示「或」，任一個符合即可（例：<code>綠美化|綠化</code>、<code>停車位|停車空間 獎勵</code>）。</li>
+      <li>「常用」按鈕會帶入預設的關鍵字組合；按鈕內容可在本檔案的 <code>QUICK</code> 設定中增減。</li>
+      <li>結果依條文順序排列；勾選「只顯示相關段落」時只列出含關鍵字的段落，點標題列可展開全文。</li>
+      <li>「台／臺」、全形／半形、空白都視為相同，例如 <code>台中</code> 可找到「臺中」，<code>32條</code> 可找到「第32 條」。</li>
+      <li>按「開啟 PDF」會在新分頁開啟原始檔並跳到該條文所在頁。有框線的表格會以表格呈現；沒有框線或排版特殊的表格可能只顯示文字，<b>數值請以 PDF 原檔為準</b>。</li>
+    </ul>
+
+    <h3>資料來源（下載最新土管）</h3>
+    <p>臺中市政府都市發展局 › 都市計畫專區 › 土地使用管制彙總：<br>
+      <a id="srcLink" target="_blank" rel="noopener"></a></p>
+    <p>進入各都市計畫區頁面後，「檔案下載」區即為各細部計畫之土地使用管制 PDF。</p>
+
+    <h3>一次下載整頁土管 PDF（瀏覽器主控台）</h3>
+    <p>網站每個都市計畫區頁面有數十個 PDF，可用 Chrome／Edge 的主控台（Console）一次全部下載：</p>
+    <ol>
+      <li>用 Chrome 或 Edge 開啟上方「土地使用管制彙總」網址，點進要下載的都市計畫區（例：臺中市都市計畫），
+        確認畫面上看得到「檔案下載（或附件）」底下的 PDF 清單。<b>不要點進個別 PDF 或圖片</b>，要停在清單頁。</li>
+      <li>按 <code>F12</code> 開啟開發者工具，切換到 <b>Console（主控台）</b> 分頁。</li>
+      <li>（可先檢查）貼上下面這行按 Enter，會列出這頁抓得到的 PDF 清單與數量：
+        <pre id="dlCheck">console.table([...document.querySelectorAll('a[href]')].filter(a=&gt;/\.pdf/i.test(a.href)).map(a=&gt;({名稱:a.innerText.trim(), 網址:a.href})))</pre>
+        <button class="btn" data-copy="dlCheck">複製檢查指令</button></li>
+      <li>點「複製下載指令」，貼到主控台按 Enter：
+        <pre id="dlScript" style="max-height:220px">(async () =&gt; {
+  const seen = new Set();
+  const items = [...document.querySelectorAll(&#x27;a[href]&#x27;)]
+    .filter(a =&gt; /\.pdf(\?|$)/i.test(a.href) || /\.pdf\s*$/i.test(a.innerText.trim()))
+    .filter(a =&gt; !seen.has(a.href) &amp;&amp; seen.add(a.href));
+  console.log(`共 ${items.length} 個 PDF，開始下載…（下載期間請勿關閉或切換此頁）`);
+  const fail = [];
+  for (const [i, a] of items.entries()) {
+    let name = a.innerText.trim().replace(/[\\/:*?&quot;&lt;&gt;|]/g, &#x27;_&#x27;);
+    if (!/\.pdf$/i.test(name)) name += &#x27;.pdf&#x27;;
+    try {
+      const res = await fetch(a.href);
+      if (!res.ok) throw new Error(res.status);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement(&#x27;a&#x27;);
+      link.href = url; link.download = name;
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() =&gt; URL.revokeObjectURL(url), 10000);
+      console.log(`✅ ${i + 1}/${items.length} ${name}`);
+    } catch (e) {
+      console.warn(`❌ ${i + 1}/${items.length} ${name}`, e);
+      fail.push(name);
+    }
+    await new Promise(r =&gt; setTimeout(r, 1000));
+  }
+  console.log(`完成！失敗 ${fail.length} 個`, fail);
+})();
+</pre>
+        <button class="btn" data-copy="dlScript">複製下載指令</button></li>
+      <li>瀏覽器詢問「此網站要下載多個檔案」時選 <b>允許</b>（若誤按封鎖：點網址列左側圖示 → 網站設定 → 自動下載改為允許，再重跑一次）。</li>
+      <li>主控台會逐一顯示 ✅ 進度，最後一行顯示失敗清單（正常為 0 個）。檔案存到「下載」資料夾，檔名即網頁上的名稱。</li>
+      <li>把需要的 PDF 移到本資料夾，再執行下方「更新步驟」。</li>
+    </ol>
+    <p style="font-size:13px;color:var(--muted)">注意：
+      ① 若 Chrome 擋下貼上，畫面會出現黃色警告，先在主控台輸入 <code>allow pasting</code> 按 Enter，再貼一次。
+      ② 主控台出現網站本身的紅色錯誤（例如 jQuery…）不影響下載。
+      ③ 每個都市計畫區頁面要分別進去執行一次。</p>
+
+    <h3>更新步驟</h3>
+    <ol>
+      <li>從上方網址下載新的或已修正的土管 PDF（可用上面的主控台指令一次下載）。</li>
+      <li>放進本資料夾（與 <code>土管查詢.exe</code> 同一個資料夾，可再分子資料夾）。
+        若是同一份土管的新版本：直接<b>覆蓋同名檔</b>，或把舊檔移到 <code>_舊版</code> 資料夾（名稱以 <code>_</code> 開頭的資料夾不會被掃描）。</li>
+      <li>按左上角「<b>重新掃描資料夾</b>」（或重新執行 <code>土管查詢.exe</code>，啟動時也會自動掃描）。
+        只會重新處理新增或有變動的 PDF；完成後頁面會自動重新整理。</li>
+      <li>掃描後 PDF 原檔會<b>一併存進儲存檔</b>，之後就算資料夾裡沒有這個 PDF，仍可查詢與開啟。</li>
+      <li>要淘汰某份土管：先把資料夾裡的那個 PDF 刪除或移到 <code>_舊版</code>，再到查詢頁選那一份，按標題下方的「從系統移除」。</li>
+      <li>最近一次新增或更新的土管會標示 <span class="badge new">新</span>。</li>
+    </ol>
+    <p>檔名建議保留網站上的編號開頭（例：<code>1-20變更臺中市…</code>），清單會依編號排序並自動歸到對應的都市計畫區。新的都市計畫區名稱可在下方「進階設定」補上，不需重新編譯。</p>
+
+    <h3>系統檔案</h3>
+    <ul>
+      <li><code>土管查詢.exe</code>：本系統唯一的執行檔（查詢頁面、索引、說明都在裡面），不需安裝 Python。雙擊執行，使用期間保持黑色視窗開著，關閉視窗即結束。旁邊的 <code>_internal</code> 資料夾是執行檔的支援檔，必須和它放在一起，請勿刪除或改名。</li>
+      <li><code>土管查詢.db</code>：儲存檔，包含<b>所有土管 PDF 原檔</b>、索引、擷取的圖片、參考圖、設定與更新紀錄。<b>請妥善備份</b>；刪除後只能從資料夾內現有的 PDF 重建。</li>
+      <li>各份土管 PDF：掃描進系統後就不一定要留在資料夾；要新增或更新時再放進來掃描即可。</li>
+      <li>若資料看起來不對，可按住 <code>Shift</code> 再按「重新掃描資料夾」＝全部重新解析。</li>
+      <li>遇到亂碼字型（清單出現 ⚠「部分文字為亂碼」）時，系統會先自動推算；推算不出來再到下方「進階設定」補上規則。</li>
+      <li>原始碼 <code>土管查詢.py</code> 建議另存（例如放在 <code>_原始碼</code> 資料夾，不會被掃描）。修改後執行 <code>python 土管查詢.py --build-exe</code> 即可重新編譯出 <code>土管查詢.exe</code>。</li>
+    </ul>
+
+    <h3>在其他電腦使用</h3>
+    <ol>
+      <li>把 <code>土管查詢.exe</code>、<code>_internal</code> 資料夾和 <code>土管查詢.db</code> 一起複製到另一台電腦的同一個資料夾。</li>
+      <li>雙擊 <code>土管查詢.exe</code> 即可使用，不需要安裝 Python，也不需要土管 PDF 檔。</li>
+      <li>在那台電腦新增土管時，把 PDF 放進同一個資料夾，按「重新掃描資料夾」即可存進該台的儲存檔。</li>
+    </ol>
+
+    <h3>遇到無法辨識的新 PDF 時</h3>
+    <ul>
+      <li><b>亂碼字型</b>（搜尋不到、清單出現 ⚠「部分文字為亂碼」）：系統會自動推算華康 ETen 字型的換算規則並記在「更新紀錄」。
+        推算不出來時，請把該 PDF 交給維護人員取得規則（例如 <code>{"字型名稱": {"sym": 499, "han": 436}}</code>），貼到下方「亂碼字型規則」儲存，系統會自動重新解析。</li>
+      <li><b>條文切不出來</b>（⚠「無法辨識條文編號，改以頁為單位切分」）：內容仍可搜尋，只是以「頁」為單位顯示，並可開啟 PDF 對照。
+        若要改善切分方式，需修改原始碼後重新編譯。</li>
+      <li><b>掃描圖檔</b>（⚠「幾乎沒有文字層」）：PDF 只有圖片沒有文字，系統無法搜尋。可先用 Adobe Acrobat 等軟體做「文字辨識（OCR）」另存後，放回資料夾重新掃描。</li>
+      <li><b>新的都市計畫區</b>：清單顯示「編號 N-」時，到下方「都市計畫區名稱」補上名稱即可。</li>
+    </ul>
+    <h3>參考圖（範圍示意圖等）</h3>
+    <ul>
+      <li>把圖檔（.jpg／.png，例如「臺中市都市計畫-主要計畫暨細部計畫-範圍示意圖.jpg」）放進本資料夾，按「重新掃描資料夾」，左側篩選欄下方就會出現同名按鈕，點擊即可開啟查看。</li>
+      <li>圖檔會一併存進儲存檔；按鈕名稱＝檔名。要移除時，先刪除資料夾裡的圖檔，再打開該圖按「從系統移除此圖」。</li>
+    </ul>
+
+    <h3>進階設定（存在儲存檔內，不需重新編譯）</h3>
+    <p style="font-size:13px;color:var(--muted)">以 JSON 格式填寫，只需填要新增或覆蓋的項目；留空 <code>{}</code> 表示使用內建預設值。內建預設值列在每個欄位下方供參考。</p>
+    <p><b>都市計畫區名稱</b>（檔名開頭編號 → 名稱），例：<code>{"16": "東勢都市計畫"}</code></p>
+    <textarea id="setAreas" rows="4" spellcheck="false"></textarea>
+    <details><summary style="font-size:13px;color:var(--muted);cursor:pointer">內建預設值</summary><pre id="defAreas"></pre></details>
+    <p><b>亂碼字型規則</b>（字型名稱 → 換算位移），例：<code>{"DFKaiShu-SB-Estd-BF-ETen": {"sym": 499, "han": 436}}</code></p>
+    <textarea id="setFonts" rows="4" spellcheck="false"></textarea>
+    <details><summary style="font-size:13px;color:var(--muted);cursor:pointer">內建預設值</summary><pre id="defFonts"></pre></details>
+    <p><button class="btn primary" id="saveSettings">儲存設定</button> <span id="setMsg" style="font-size:13px"></span></p>
+
+    <h3>版權資訊</h3>
+    <p class="copy">台中市土管查詢系統　版本 1.2.0<br>
+      著作權所有 © 2026 <b>居研所聯合建築師事務所</b>　All rights reserved.<br>
+      作者：<b>CHIHFU HSIAO</b><br>
+      <span style="color:var(--muted);font-size:13px">本系統僅供查詢參考，法規內容以主管機關公告之原始文件為準。</span></p>
+
+    <h3>最近一次更新</h3>
+    <div class="loglist" id="lastRun"></div>
+    <h3>更新紀錄</h3>
+    <div class="loglist" id="logList"></div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script>
+(function(){
+"use strict";
+const D = window.LUC_DATA;
+const $ = id => document.getElementById(id);
+if(!D){
+  document.body.innerHTML = '<div style="padding:40px;font-size:16px;line-height:1.8">無法讀取索引資料。<br>請確認「土管查詢.exe」的黑色視窗仍在執行，再按 F5 重新整理。</div>';
+  return;
+}
+
+/* ---------- 文字正規化（1 對 1 字元，方便標示位置） ---------- */
+function normChar(c){
+  const o = c.charCodeAt(0);
+  if(o>=0xFF01 && o<=0xFF5E) c = String.fromCharCode(o-0xFEE0);   // 全形 → 半形
+  else if(c==="台") c="臺";
+  else if(c==="　") c=" ";
+  return c.toLowerCase();
+}
+function normWithMap(s){            // 回傳去空白後的正規化字串與對應原文位置
+  let t="", map=[];
+  for(let i=0;i<s.length;i++){
+    const c = normChar(s[i]);
+    if(/\s/.test(c)) continue;
+    t+=c; map.push(i);
+  }
+  return {t,map};
+}
+const normPlain = s => normWithMap(s).t;
+const esc = s => s.replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function markRanges(text, kws){
+  if(!kws.length) return [];
+  const {t,map} = normWithMap(text);
+  let ranges=[];
+  for(const k of kws){
+    let from=0, i;
+    while((i=t.indexOf(k,from))>=0){ ranges.push([map[i], map[i+k.length-1]+1]); from=i+1; }
+  }
+  if(!ranges.length) return [];
+  ranges.sort((a,b)=>a[0]-b[0]);
+  const merged=[ranges[0].slice()];
+  for(const r of ranges.slice(1)){
+    const last=merged[merged.length-1];
+    if(r[0]<=last[1]) last[1]=Math.max(last[1],r[1]); else merged.push(r.slice());
+  }
+  return merged;
+}
+function highlight(text, kws){
+  if(!kws.length) return {html:esc(text), hit:false};
+  const {t,map} = normWithMap(text);
+  let ranges=[];
+  for(const k of kws){
+    let from=0, i;
+    while((i=t.indexOf(k,from))>=0){ ranges.push([map[i], map[i+k.length-1]+1]); from=i+1; }
+  }
+  if(!ranges.length) return {html:esc(text), hit:false};
+  ranges.sort((a,b)=>a[0]-b[0]);
+  const merged=[ranges[0].slice()];
+  for(const r of ranges.slice(1)){
+    const last=merged[merged.length-1];
+    if(r[0]<=last[1]) last[1]=Math.max(last[1],r[1]); else merged.push(r.slice());
+  }
+  let html="", pos=0;
+  for(const [a,b] of merged){ html+=esc(text.slice(pos,a))+"<mark>"+esc(text.slice(a,b))+"</mark>"; pos=b; }
+  return {html:html+esc(text.slice(pos)), hit:true};
+}
+
+/* ---------- 資料準備 ---------- */
+const docs = D.docs.map((d,i)=>({...d, idx:i,
+  arts: d.a.map(a=>{
+    const paras = a[3].split("\n").map(p=> p.charCodeAt(0)===1 ? {tab:JSON.parse(p.slice(1))}
+                                      : p.charCodeAt(0)===2 ? {fig:JSON.parse(p.slice(1))} : {text:p});
+    const plain = paras.map(p=> p.tab ? p.tab.cells.map(c=>c[4]).join(" ") : p.fig ? "" : p.text).join("\n");
+    return {label:a[0], group:a[1], page:a[2], paras, text:plain, norm:null};
+  })}));
+
+/* ---------- 圖片 ---------- */
+// 每份土管的圖號 → 條目，例如「附圖一」「圖5-3」
+const FIGREF = /(附圖|圖)\s*([一二三四五六七八九十]+|\d+(?:\s*-\s*\d+)?)/g;
+docs.forEach(d=>{ d.figs={}; d.arts.forEach((a,i)=>{ if(a.group==="圖" && !(a.label in d.figs)) d.figs[a.label]=i; }); });
+function figHTML(fig){
+  return `<figure class="fig"><a href="${esc(fig.src)}" target="_blank" title="開啟原尺寸圖片">
+    <img src="${esc(fig.src)}" loading="lazy" alt="附圖" style="aspect-ratio:${fig.w}/${fig.h}"></a></figure>`;
+}
+// 文字 → HTML：同時處理關鍵字標示（mark）與圖號連結（a），兩者可重疊
+function renderText(text, kws, d, selfIdx){
+  const marks = markRanges(text, kws);
+  const links = [];
+  for(const m of text.matchAll(FIGREF)){
+    const i = d.figs[(m[1]+m[2]).replace(/\s+/g,"")];
+    if(i!==undefined && i!==selfIdx) links.push([m.index, m.index+m[0].length, i]);
+  }
+  const cuts = new Set([0, text.length]);
+  marks.forEach(r=>{cuts.add(r[0]);cuts.add(r[1]);}); links.forEach(r=>{cuts.add(r[0]);cuts.add(r[1]);});
+  const pts=[...cuts].sort((a,b)=>a-b);
+  let html="", openLink=null;
+  for(let k=0;k<pts.length-1;k++){
+    const a=pts[k], b=pts[k+1]; if(a===b) continue;
+    const L = links.find(r=>r[0]<=a && b<=r[1]);
+    if(openLink && openLink!==L){ html+="</a>"; openLink=null; }
+    if(L && openLink!==L){ html+=`<a href="#" class="figref" data-d="${d.idx}" data-a="${L[2]}">`; openLink=L; }
+    const seg=esc(text.slice(a,b));
+    html += marks.some(r=>r[0]<=a && b<=r[1]) ? `<mark>${seg}</mark>` : seg;
+  }
+  if(openLink) html+="</a>";
+  return {html, hit: marks.length>0};
+}
+function showFig(d, i){
+  const a=d.arts[i];
+  $("figBox").innerHTML = `<button class="btn close" id="figClose">關閉</button>
+    <h2>${esc((d.code?d.code+" ":"")+a.paras.filter(p=>p.text).map(p=>p.text).join(" "))}</h2>
+    ${a.paras.filter(p=>p.fig).map(p=>figHTML(p.fig)).join("")}
+    <div style="text-align:right"><a class="btn" href="${pdfHref(d.file,a.page)}" target="_blank">開啟 PDF 第 ${a.page} 頁</a></div>`;
+  $("figModal").classList.remove("hidden");
+  $("figClose").onclick=()=>$("figModal").classList.add("hidden");
+}
+
+/* ---------- 表格 ---------- */
+function tableHTML(tab, kws){
+  // 依 r/c/rowspan/colspan 還原表格；被合併覆蓋的位置不輸出
+  const grid = Array.from({length:tab.nr}, ()=>Array(tab.nc).fill(null));
+  for(const c of tab.cells){
+    const [r,cc,rs,cs] = c;
+    for(let i=r;i<r+rs && i<tab.nr;i++) for(let j=cc;j<cc+cs && j<tab.nc;j++) grid[i][j] = (i===r&&j===cc) ? c : "x";
+  }
+  let hit=false, html='<div class="tbl"><table>';
+  for(let i=0;i<tab.nr;i++){
+    let row="";
+    for(let j=0;j<tab.nc;j++){
+      const c = grid[i][j];
+      if(c==="x") continue;
+      if(c===null){ row+="<td></td>"; continue; }
+      const h = highlight(c[4], kws); if(h.hit) hit=true;
+      row += `<td${c[2]>1?` rowspan="${c[2]}"`:""}${c[3]>1?` colspan="${c[3]}"`:""}${h.hit&&kws.length?' class="hit"':""}>${h.html}</td>`;
+    }
+    html += `<tr>${row}</tr>`;
+  }
+  return {html: html+"</table></div>", hit};
+}
+// 「新」= 最近一次「有變動」的更新中新增或更新的土管（第一次建立索引時不標示）
+const newestChange = docs.reduce((m,d)=> d.changed_at && d.changed_at>m ? d.changed_at : m, "");
+const isNew = d => !!newestChange && d.changed_at===newestChange;
+const areaName = k => (D.areas && D.areas[k]) || (k==="其他" ? "其他" : `編號 ${k}-`);
+const latestDate = d => d.dates.length ? d.dates[d.dates.length-1] : "";
+
+function pdfHref(file, page){
+  return "pdf/" + ((window.LUC_FILES.pdf[file]||"").slice(4)) + (page ? "#page="+page : "");
+}
+
+$("builtAt").textContent = `${docs.length} 份土管・索引 ${D.built_at}`;
+$("srcLink").href = D.source_url; $("srcLink").textContent = D.source_url;
+
+/* ---------- 左側清單 ---------- */
+let current = "all";
+function renderList(){
+  const f = normPlain($("docFilter").value);
+  const box = $("docList"); box.innerHTML="";
+  const all = document.createElement("button");
+  all.className = "item all"+(current==="all"?" on":"");
+  all.innerHTML = `<span class="code">全部</span><span class="t">全部土管（跨檔搜尋）</span>`;
+  all.onclick = ()=>select("all");
+  box.appendChild(all);
+  const areas = [];
+  for(const d of docs){ if(!areas.includes(d.area)) areas.push(d.area); }
+  areas.sort((a,b)=> (a==="其他")-(b==="其他") || (+a)-(+b));
+  for(const ar of areas){
+    const items = docs.filter(d=>d.area===ar && (!f || normPlain(d.code+d.title+d.file).includes(f)));
+    if(!items.length) continue;
+    const h=document.createElement("div"); h.className="area"; h.textContent=areaName(ar)+`（${items.length}）`;
+    box.appendChild(h);
+    for(const d of items){
+      const b=document.createElement("button");
+      b.className="item"+(current===d.idx?" on":"");
+      const badges = (isNew(d)?'<span class="badge new">新</span>':"") +
+                     (d.warn?'<span class="badge warn">⚠</span>':"");
+      b.innerHTML = `<span class="code">${esc(d.code||"—")}</span>
+        <span><span class="t">${esc(d.title)}</span>${badges}
+        <div class="d">${latestDate(d)?`<span class="pubdate">${latestDate(d)} 發布實施</span>・`:""}${d.pages} 頁・${d.arts.filter(a=>a.label!=="前言").length} 條</div></span>`;
+      b.onclick=()=>select(d.idx);
+      box.appendChild(b);
+    }
+  }
+}
+
+function select(id){
+  current=id;
+  try{ localStorage.setItem("luc.doc", String(id==="all"?"all":docs[id].file)); }catch(e){}
+  renderList(); renderHead(); runSearch();
+  $("main").scrollTop=0;
+  $("q").focus();
+}
+
+function renderHead(){
+  const warn=$("docWarn"); warn.innerHTML="";
+  if(current==="all"){
+    $("docTitle").textContent="全部土管";
+    $("docMeta").innerHTML=`<span>共 ${docs.length} 份，結果依編號、條文順序排列</span>`;
+    const ws = docs.filter(d=>d.warn);
+    if(ws.length) warn.innerHTML=`<div class="warnbox">⚠ ${ws.length} 份 PDF 無法正常擷取文字，可能搜尋不到：${ws.map(d=>esc(d.code||d.title)).join("、")}</div>`;
+    return;
+  }
+  const d=docs[current];
+  $("docTitle").textContent=(d.code?d.code+" ":"")+d.title;
+  $("docMeta").innerHTML=`<span>${d.dates.length?`<span class="pubdate">發布實施：${d.dates.join("、")}</span>`:"未偵測到發布日期"}</span>
+    <span>${d.pages} 頁・${d.arts.filter(a=>a.label!=="前言").length} 條（以「${d.mode==="條"?"條／點":d.mode==="頁"?"頁":"點"}」切分）</span>
+    <span>${d.changed_at?"更新於："+esc(d.changed_at):"加入索引："+esc(d.first_seen||"")}</span>
+    <a class="btn primary" href="${pdfHref(d.file)}" target="_blank">開啟 PDF</a>
+    <button class="linkbtn" style="color:var(--muted)" onclick="LUC.removeItem(${esc(JSON.stringify(d.file))},'doc')">從系統移除</button>`;
+  if(d.warn) warn.innerHTML=`<div class="warnbox">⚠ ${esc(d.warn)}</div>`;
+}
+
+/* ---------- 搜尋 ---------- */
+// 空白＝而且（AND）；「|」＝或（OR），例：「綠美化|綠化 退縮」
+function termGroups(){
+  return $("q").value.split(/[\s\u3000]+/)
+    .map(t=>t.split(/[|｜]/).map(normPlain).filter(Boolean)).filter(g=>g.length);
+}
+function keywords(){ return termGroups().flat(); }
+function artMatch(a, groups){
+  if(!a.norm) a.norm = normPlain(a.text);
+  return groups.every(g=>g.some(k=>a.norm.includes(k)));
+}
+
+/* ---------- 常用搜尋按鈕（label＝按鈕文字，q＝實際搜尋的關鍵字，可自行增減） ---------- */
+const QUICK = [
+  {label:"最高建蔽率", q:"建蔽率"},
+  {label:"退縮建築",   q:"退縮"},
+  {label:"基地綠美化", q:"綠美化|綠化"},
+  {label:"停車位",     q:"停車位|停車空間"},
+  {label:"獎勵措施",   q:"獎勵"},
+];
+(function(){
+  const box=$("quick");
+  QUICK.forEach(x=>{
+    const b=document.createElement("button");
+    b.className="chip"; b.textContent=x.label; b.title="搜尋："+x.q;
+    b.onclick=()=>{ $("q").value=x.q; runSearch(); markChip(); $("q").focus(); };
+    box.appendChild(b);
+  });
+})();
+function markChip(){
+  document.querySelectorAll(".chip").forEach((b,i)=>b.classList.toggle("on", $("q").value.trim()===QUICK[i].q));
+}
+
+function cardHTML(d, a, kws, onlyHit, open){
+  const first = (a.paras.find(p=>!p.tab)||{text:""}).text;
+  const grp = a.group ? `<span class="grp" title="${esc(a.group)}">${esc(a.group)}</span>` : "";
+  let body="", gap=false, hits=0;
+  const selfIdx = d.arts.indexOf(a);
+  a.paras.forEach((para,i)=>{
+    if(para.fig){ body += figHTML(para.fig); gap=false; return; }
+    if(para.tab){
+      const t = tableHTML(para.tab, kws);
+      if(t.hit) hits++;
+      if(!onlyHit || !kws.length || t.hit){ body += t.html; gap=false; }
+      else if(!gap){ body+=`<div class="gap">⋯⋯（表格）</div>`; gap=true; }
+      return;
+    }
+    const p = para.text;
+    const h = renderText(p, kws, d, selfIdx);
+    if(h.hit) hits++;
+    const show = !onlyHit || !kws.length || h.hit || i===0;
+    if(show){
+      const sub = i>0 && /^([（(][一二三四五六七八九十\d]+[)）]|\d+[.、．])/.test(p);
+      body += `<p class="${sub?"sub ":""}${h.hit&&kws.length?"hit":""}">${h.html}</p>`;
+      gap=false;
+    }else if(!gap){ body+=`<div class="gap">⋯⋯</div>`; gap=true; }
+  });
+  const headFirst = first.replace(/^\s*(第[一二三四五六七八九十百零〇]+\s?[條點]|[一二三四五六七八九十]+|(附圖|圖)\s*([一二三四五六七八九十]+|\d+(\s*-\s*\d+)?))\s*[、：:]?\s*/,"");
+  return `<div class="card" data-d="${d.idx}" data-a="${d.arts.indexOf(a)}">
+    <div class="card-h" data-toggle>
+      <span class="lab">${esc(a.label)}</span>
+      <span class="first">${esc(headFirst.slice(0,60))}</span>${grp}
+      <span class="pg">p.${a.page}</span>
+    </div>
+    <div class="card-b${open?"":" hidden"}" data-full="0">${body}</div>
+    <div class="card-f${open?"":" hidden"}">
+      ${onlyHit&&kws.length?'<button class="btn" data-expand>顯示全文</button>':""}
+      <a class="btn" href="${pdfHref(d.file,a.page)}" target="_blank">開啟 PDF 第 ${a.page} 頁</a>
+    </div></div>`;
+}
+
+let timer=null;
+function runSearch(){
+  const groups=termGroups(), kws=groups.flat(), onlyHit=$("onlyHit").checked;
+  markChip();
+  try{ localStorage.setItem("luc.q",$("q").value); }catch(e){}
+  const out=$("results");
+  const targets = current==="all" ? docs : [docs[current]];
+  let html="", nArt=0, nDoc=0;
+  if(current==="all" && !kws.length){
+    out.innerHTML=`<div class="empty">請輸入關鍵字以搜尋全部土管，或從左側選擇一份土管瀏覽條文。</div>`;
+    $("summary").textContent=""; return;
+  }
+  for(const d of targets){
+    const arts = kws.length ? d.arts.filter(a=>artMatch(a,groups)) : d.arts;
+    if(!arts.length) continue;
+    nDoc++; nArt+=arts.length;
+    if(current==="all"){
+      html+=`<div class="docsep"><h2><span class="code">${esc(d.code||"")}</span>${esc(d.title)}</h2>
+        <a class="btn" href="${pdfHref(d.file)}" target="_blank">開啟 PDF</a></div>`;
+    }
+    html += arts.map(a=>cardHTML(d,a,kws,onlyHit, kws.length>0)).join("");
+  }
+  out.innerHTML = html || `<div class="empty">找不到同時包含「${esc($("q").value.trim())}」的條文。<br>可試著減少關鍵字、改用同義詞，或切換到「全部土管」。</div>`;
+  $("summary").textContent = kws.length
+    ? (current==="all" ? `符合 ${nDoc} 份土管、${nArt} 條條文` : `符合 ${nArt} 條條文（依條文順序）`)
+    : (current==="all" ? "" : `共 ${nArt} 條，點標題展開；輸入關鍵字可篩選`);
+}
+
+$("results").addEventListener("click", e=>{
+  const fr = e.target.closest(".figref");
+  if(fr){ e.preventDefault(); showFig(docs[+fr.dataset.d], +fr.dataset.a); return; }
+  const card = e.target.closest(".card"); if(!card) return;
+  if(e.target.closest("[data-toggle]")){
+    card.querySelector(".card-b").classList.toggle("hidden");
+    card.querySelector(".card-f").classList.toggle("hidden");
+  }
+  if(e.target.closest("[data-expand]")){
+    const d=docs[+card.dataset.d], a=d.arts[+card.dataset.a];
+    const tmp=document.createElement("div"); tmp.innerHTML=cardHTML(d,a,keywords(),false,true);
+    card.replaceWith(tmp.firstElementChild);
+  }
+});
+
+$("q").addEventListener("input", ()=>{ clearTimeout(timer); timer=setTimeout(runSearch,150); });
+$("q").addEventListener("keydown", e=>{ if(e.key==="Escape"){ $("q").value=""; runSearch(); }});
+$("onlyHit").addEventListener("change", runSearch);
+$("docFilter").addEventListener("input", renderList);
+document.querySelectorAll("[data-copy]").forEach(b=>b.onclick=async()=>{
+  const t=$(b.dataset.copy).textContent;
+  try{ await navigator.clipboard.writeText(t); }
+  catch(e){ const r=document.createRange(); r.selectNodeContents($(b.dataset.copy)); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r); document.execCommand("copy"); }
+  const o=b.textContent; b.textContent="已複製 ✓"; setTimeout(()=>b.textContent=o,1500);
+});
+$("helpBtn").onclick=()=>$("help").classList.remove("hidden");
+$("helpClose").onclick=()=>$("help").classList.add("hidden");
+$("help").addEventListener("click",e=>{ if(e.target.id==="help") $("help").classList.add("hidden"); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ $("help").classList.add("hidden"); $("figModal").classList.add("hidden"); }});
+$("figModal").addEventListener("click",e=>{ if(e.target.id==="figModal") $("figModal").classList.add("hidden"); });
+
+// 最近一次更新紀錄
+(function(){
+  const r=D.last_run||{}; const rows=[];
+  (r.added||[]).forEach(f=>rows.push("＋ 新增　"+f));
+  (r.updated||[]).forEach(f=>rows.push("＊ 更新　"+f));
+  (r.removed||[]).forEach(f=>rows.push("－ 移除　"+f));
+  (r.failed||[]).forEach(f=>rows.push("！ 失敗　"+f));
+  docs.filter(d=>d.warn).forEach(d=>rows.push("⚠ "+(d.code||d.title)+"："+d.warn));
+  $("lastRun").innerHTML = rows.length ? rows.map(esc).join("<br>") : "（沒有變動）";
+})();
+
+// 從系統移除（土管或參考圖）
+window.LUC = window.LUC || {};
+window.LUC.removeItem = async (rel, kind)=>{
+  const name = rel.split("/").pop();
+  if(!confirm(`確定要從系統移除「${name}」？\n\n移除後儲存檔裡的索引與原檔會一併刪除，無法復原。`)) return;
+  const r = await (await fetch("api/delete", {method:"POST", body: JSON.stringify({rel, kind})})).json();
+  if(!r.ok){ alert(r.error); return; }
+  location.reload();
+};
+
+// 參考圖（範圍示意圖等）
+(function(){
+  const box=$("refBtns");
+  (D.refs||[]).forEach(rel=>{
+    const title = rel.split("/").pop().replace(/\.[^.]+$/,"");
+    const src = window.LUC_FILES.ref[rel] || "";
+    const b=document.createElement("button"); b.className="refbtn";
+    b.innerHTML = `<span>🗺</span><span>${esc(title)}</span>`;
+    b.onclick = ()=>{
+      $("figBox").innerHTML = `<button class="btn close" id="figClose">關閉</button><h2>${esc(title)}</h2>
+        <div class="refview"><a href="${src}" target="_blank" title="在新分頁開啟原尺寸（可放大）"><img src="${src}" alt=""></a></div>
+        <p style="font-size:13px;color:var(--muted);display:flex;justify-content:space-between;gap:12px">
+          <span>點圖片可在新分頁開啟原尺寸並放大檢視。</span>
+          <button class="linkbtn" style="color:var(--muted)" id="refRemove">從系統移除此圖</button></p>`;
+      $("refRemove").onclick=()=>LUC.removeItem(rel,"ref");
+      $("figBox").style.maxWidth = "1200px";
+      $("figModal").classList.remove("hidden");
+      $("figClose").onclick=()=>{ $("figModal").classList.add("hidden"); $("figBox").style.maxWidth=""; };
+    };
+    box.appendChild(b);
+  });
+})();
+
+// 進階設定
+(function(){
+  const st = D.settings || {areas:{}, fontmap:{}}, df = D.defaults || {areas:{}, fontmap:{}};
+  $("setAreas").value = JSON.stringify(st.areas||{}, null, 2);
+  $("setFonts").value = JSON.stringify(st.fontmap||{}, null, 2);
+  $("defAreas").textContent = JSON.stringify(df.areas, null, 2);
+  $("defFonts").textContent = JSON.stringify(df.fontmap, null, 2);
+  $("saveSettings").onclick = async ()=>{
+    let body;
+    try{ body = {areas: JSON.parse($("setAreas").value||"{}"), fontmap: JSON.parse($("setFonts").value||"{}")}; }
+    catch(e){ $("setMsg").textContent = "JSON 格式錯誤：" + e.message; $("setMsg").style.color="var(--pub)"; return; }
+    const r = await (await fetch("api/settings", {method:"POST", body: JSON.stringify(body)})).json();
+    if(!r.ok){ $("setMsg").textContent = "儲存失敗：" + r.error; $("setMsg").style.color="var(--pub)"; return; }
+    $("setMsg").style.color="var(--new)";
+    if(r.rescan){ $("setMsg").textContent = "已儲存，字型規則變更，正在重新解析全部 PDF…"; wasRunning=true; setTimeout(pollStatus, 500); }
+    else { $("setMsg").textContent = "已儲存"; setTimeout(()=>location.reload(), 600); }
+  };
+})();
+
+// 更新紀錄
+$("logList").innerHTML = (D.log||[]).length
+  ? D.log.map(l=>`<div style="margin-bottom:8px"><b>[${esc(l.ts)}]</b><br>${esc(l.text).replace(/\n/g,"<br>")}</div>`).join("")
+  : "（尚無紀錄）";
+
+// 重新掃描資料夾＋背景掃描進度
+let wasRunning=false;
+async function pollStatus(){
+  let st; try{ st = await (await fetch("api/status",{cache:"no-store"})).json(); }catch(e){ $("scanMsg").textContent="（程式未執行）"; return; }
+  $("scanMsg").textContent = st.running ? (st.total ? `掃描中 ${st.done}/${st.total}…` : "掃描中…") : (st.error ? "掃描錯誤："+st.error : "");
+  $("rescanBtn").disabled = st.running;
+  if(st.running){ wasRunning=true; setTimeout(pollStatus, 1000); }
+  else if(wasRunning){ location.reload(); }
+}
+$("rescanBtn").onclick = async e=>{
+  const full = e.shiftKey;
+  if(full && !confirm("全部 PDF 重新解析？（需要幾分鐘）")) return;
+  await fetch("api/rebuild"+(full?"?full=1":""), {method:"POST"});
+  wasRunning=true; setTimeout(pollStatus, 300);
+};
+// （離線版沒有背景掃描）
+
+// 還原上次狀態
+let saved=null, savedQ="";
+try{ saved=localStorage.getItem("luc.doc"); savedQ=localStorage.getItem("luc.q")||""; }catch(e){}
+$("q").value=savedQ;
+const found = saved && saved!=="all" ? docs.find(d=>d.file===saved) : null;
+select(found ? found.idx : "all");
+})();
+</script>
+<div id="pv" class="hidden"><div class="bar"><button class="x" id="pvClose">關閉</button><span class="t" id="pvTitle"></span>
+<button id="pvOut">－</button><button id="pvIn">＋</button><span id="pvPage" style="min-width:64px;text-align:right"></span></div>
+<div id="pvBody"></div></div>
+<div id="iv" class="hidden"><div class="bar"><button class="x" id="ivClose">關閉</button><span class="t" id="ivTitle"></span>
+<button id="ivOut">－</button><button id="ivIn">＋</button></div><div id="ivBody"><img id="ivImg" alt=""></div></div>
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const F = window.LUC_FILES || {pdf:{}, ref:{}, assets:[], core:[]};
+const nameOf = {};
+Object.keys(F.pdf).forEach(k=>nameOf[F.pdf[k]] = k.split("/").pop().replace(/\.pdf$/i,""));
+// ---------- 狀態列
+const msg = t => { const m=$("scanMsg"); if(m) m.textContent = t; };
+msg("iPad 離線版");
+
+// ---------- 註冊離線程式（service worker）
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js").then(()=>syncAssets()).catch(e=>msg("離線功能無法啟用："+e.message));
+}
+try{ navigator.storage && navigator.storage.persist && navigator.storage.persist(); }catch(e){}
+
+// ---------- 把 PDF、圖片下載存進 iPad（只下載新增或有變動的）
+let syncing=false;
+async function syncAssets(){
+  if(syncing || !("caches" in window)) return;
+  syncing=true;
+  try{
+    const c = await caches.open("luc-assets");
+    let old={}; try{ const r=await c.match("__hashes.json"); if(r) old=await r.json(); }catch(e){}
+    const have = new Set((await c.keys()).map(r=>r.url));
+    const abs = u => new URL(u, location.href).href;
+    const want = F.assets;
+    const todo = want.filter(([u,h])=>old[u]!==h || !have.has(abs(u)));
+    let done=0, fail=0;
+    const save = ()=>c.put("__hashes.json", new Response(JSON.stringify(old), {headers:{"Content-Type":"application/json"}}));
+    async function one([u,h]){
+      try{
+        const r = await fetch(u, {cache:"no-cache"});
+        if(!r.ok) throw new Error(r.status);
+        await c.put(u, r); old[u]=h;
+      }catch(e){ fail++; }
+      done++;
+      if(done%10===0){ msg(`下載離線資料 ${done}/${todo.length}…（請保持開啟）`); await save(); }
+    }
+    if(todo.length){
+      msg(`下載離線資料 0/${todo.length}…（請保持開啟）`);
+      let i=0; const workers=[];
+      for(let w=0; w<4; w++) workers.push((async()=>{ while(i<todo.length){ await one(todo[i++]); } })());
+      await Promise.all(workers);
+    }
+    // 移除已不需要的舊檔
+    const keep = new Set(want.map(([u])=>abs(u))); keep.add(abs("__hashes.json"));
+    for(const r of await c.keys()){ if(!keep.has(r.url)) await c.delete(r); }
+    Object.keys(old).forEach(u=>{ if(!keep.has(abs(u))) delete old[u]; });
+    await save();
+    msg(fail ? `離線資料有 ${fail} 個檔案下載失敗，連上網路後重新開啟會再補下載` : `iPad 離線版．資料已全部存在本機（${want.length} 個檔案）`);
+  }catch(e){ msg("離線資料下載失敗："+e.message); }
+  syncing=false;
+}
+window.addEventListener("online", ()=>syncAssets());
+
+// ---------- PDF 檢視器（pdf.js；可離線、可跳到指定頁）
+let pdfDoc=null, zoom=1, observer=null, curUrl="", gen=0;
+if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "lib/pdf.worker.min.js";
+async function openPdf(url, page){
+  $("pv").classList.remove("hidden");
+  $("pvTitle").textContent = nameOf[url] || url;
+  const body=$("pvBody");
+  if(url!==curUrl || !pdfDoc){
+    body.innerHTML = '<div id="pvMsg">開啟中…</div>';
+    try{
+      const buf = await (await fetch(url)).arrayBuffer();
+      pdfDoc = await pdfjsLib.getDocument({data:buf, cMapUrl:"lib/cmaps/", cMapPacked:true,
+                                          standardFontDataUrl:"lib/standard_fonts/"}).promise;
+      curUrl=url; zoom=1;
+    }catch(e){ body.innerHTML = '<div id="pvMsg">無法開啟 PDF（'+e.message+'）。<br>若尚未下載完離線資料，請連上網路後再試。</div>'; pdfDoc=null; return; }
+    await layout();
+  }
+  goPage(page||1);
+}
+async function layout(){
+  const body=$("pvBody"), my=++gen;
+  if(observer) observer.disconnect();
+  body.innerHTML="";
+  const p1 = await pdfDoc.getPage(1); const v1 = p1.getViewport({scale:1});
+  const W = Math.round((body.clientWidth-20) * zoom);
+  for(let i=1;i<=pdfDoc.numPages;i++){
+    const d=document.createElement("div"); d.className="pg"; d.dataset.n=i;
+    d.style.width=W+"px"; d.style.height=Math.round(W*v1.height/v1.width)+"px";
+    d.innerHTML='<span class="no">'+i+' / '+pdfDoc.numPages+'</span>';
+    body.appendChild(d);
+  }
+  observer = new IntersectionObserver(es=>es.forEach(e=>{ if(e.isIntersecting) render(e.target, my); }), {root:body, rootMargin:"600px 0px"});
+  body.querySelectorAll(".pg").forEach(d=>observer.observe(d));
+}
+async function render(d, my){
+  if(d.dataset.done==="1") return; d.dataset.done="1";
+  const pg = await pdfDoc.getPage(+d.dataset.n); if(my!==gen) return;
+  const W = parseFloat(d.style.width), v0 = pg.getViewport({scale:1});
+  const dpr = Math.min(window.devicePixelRatio||1, 2), scale = W/v0.width*dpr;
+  const vp = pg.getViewport({scale});
+  d.style.height = Math.round(W*v0.height/v0.width)+"px";
+  const cv=document.createElement("canvas"); cv.width=Math.floor(vp.width); cv.height=Math.floor(vp.height);
+  d.insertBefore(cv, d.firstChild);
+  try{ await pg.render({canvasContext:cv.getContext("2d"), viewport:vp}).promise; }catch(e){}
+}
+function goPage(n){
+  const d=$("pvBody").querySelector('.pg[data-n="'+n+'"]');
+  if(d) $("pvBody").scrollTop = d.offsetTop - 10;
+}
+function curPage(){
+  const b=$("pvBody"), y=b.scrollTop+b.clientHeight/3;
+  let n=1; b.querySelectorAll(".pg").forEach(d=>{ if(d.offsetTop<=y) n=+d.dataset.n; });
+  return n;
+}
+$("pvBody").addEventListener("scroll", ()=>{ if(pdfDoc) $("pvPage").textContent = curPage()+" / "+pdfDoc.numPages; });
+async function rezoom(f){ if(!pdfDoc) return; const n=curPage(); zoom=Math.min(4,Math.max(0.5,zoom*f)); await layout(); goPage(n); }
+$("pvIn").onclick=()=>rezoom(1.25); $("pvOut").onclick=()=>rezoom(0.8);
+$("pvClose").onclick=()=>$("pv").classList.add("hidden");
+
+// ---------- 圖片檢視
+let iz=1;
+function openImg(src, title){
+  $("iv").classList.remove("hidden"); $("ivTitle").textContent=title||"";
+  const im=$("ivImg"); iz=1; im.style.width="100%"; im.src=src;
+}
+$("ivIn").onclick=()=>{ iz=Math.min(6,iz*1.4); $("ivImg").style.width=(iz*100)+"%"; };
+$("ivOut").onclick=()=>{ iz=Math.max(1,iz/1.4); $("ivImg").style.width=(iz*100)+"%"; };
+$("ivClose").onclick=()=>$("iv").classList.add("hidden");
+
+// ---------- 攔截「開啟 PDF」「開啟原尺寸圖片」：在 App 內開啟（主畫面 App 沒有上一頁按鈕）
+document.addEventListener("click", e=>{
+  const a = e.target.closest && e.target.closest("a[href]"); if(!a) return;
+  const h = a.getAttribute("href");
+  if(h.startsWith("pdf/")){
+    e.preventDefault(); e.stopPropagation();
+    const [u,frag] = h.split("#"); const m = /page=(\d+)/.exec(frag||"");
+    openPdf(u, m ? +m[1] : 1);
+  }else if(h.startsWith("img/") || h.startsWith("ref/")){
+    e.preventDefault(); e.stopPropagation();
+    openImg(h, a.title || "");
+  }
+}, true);
+})();
+</script>
+</body>
+</html>
